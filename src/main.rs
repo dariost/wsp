@@ -83,6 +83,7 @@ impl Client {
                         Some(Ok(_)) => continue,
                     };
                     stdout.write_all(&msg).await?;
+                    stdout.flush().await?;
                 }
                 size = stdin.read(&mut buffer) => {
                     let size = size?;
