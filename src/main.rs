@@ -10,7 +10,7 @@ use tokio::{
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{accept_async, connect_async_with_config};
 
-const BUFFER_SIZE: usize = 1024;
+const BUFFER_SIZE: usize = 1 << 16;
 
 #[derive(Parser)]
 struct Args {
@@ -116,6 +116,7 @@ async fn forward(stream: TcpStream, addr: SocketAddr) -> Result<(), anyhow::Erro
     let mut inbound = accept_async(stream).await?;
     let mut outbound = TcpStream::connect(addr).await?;
     outbound.set_nodelay(true)?;
+    let mut buffer = vec![0; BUFFER_SIZE];
     loop {
         select! {
             msg = inbound.next() => {
@@ -133,12 +134,11 @@ async fn forward(stream: TcpStream, addr: SocketAddr) -> Result<(), anyhow::Erro
                 outbound.write_all(&msg).await?;
             }
             _ = outbound.readable() => {
-                let mut buf = vec![0; BUFFER_SIZE];
-                let n = outbound.read(&mut buf).await?;
+                let n = outbound.read(&mut buffer).await?;
                 if n == 0 {
                     break;
                 }
-                inbound.send(Message::Binary(buf[..n].to_vec().into())).await?;
+                inbound.send(Message::Binary(buffer[..n].to_vec().into())).await?;
             }
         }
     }
