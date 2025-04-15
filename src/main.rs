@@ -8,7 +8,7 @@ use tokio::{
     spawn,
 };
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{accept_async, connect_async_with_config};
+use tokio_tungstenite::{accept_async, connect_async_tls_with_config};
 
 const BUFFER_SIZE: usize = 1 << 16;
 
@@ -33,6 +33,10 @@ enum Command {
 struct Client {
     /// The WebSocket server URL to connect to
     url: String,
+
+    /// Allows invalid certificates
+    #[clap(long, default_value_t = false)]
+    insecure: bool,
 }
 
 #[derive(Parser)]
@@ -64,7 +68,12 @@ fn main() -> Result<(), anyhow::Error> {
 
 impl Client {
     async fn run(self) -> Result<(), anyhow::Error> {
-        let (mut stream, _) = connect_async_with_config(self.url, None, true).await?;
+        let connector = native_tls::TlsConnector::builder()
+            .danger_accept_invalid_certs(self.insecure)
+            .build()?;
+        let connector = tokio_tungstenite::Connector::NativeTls(connector);
+        let (mut stream, _) =
+            connect_async_tls_with_config(self.url, None, true, Some(connector)).await?;
         let mut stdin = tokio::io::stdin();
         let mut stdout = tokio::io::stdout();
         let mut buffer = vec![0; BUFFER_SIZE];
